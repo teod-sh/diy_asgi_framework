@@ -1,0 +1,9 @@
+[project]
+name = "diy-asgi-framework"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "coverage>=7.10.6",
+    "uvicorn>=0.35.0",
+]
