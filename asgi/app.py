@@ -1,50 +1,39 @@
-from router import Router
+from typing import List
 
+from asgi.request_data import RequestData
+from asgi.router import Router
+from asgi.api_router import ApiRouter
 
-async def home():
-    print("home triggered")
-
-async def users():
-    print("users triggered")
 
 class App:
 
     def __init__(self):
+        self.router = None
+
+    def include_routes(self, routes: List[ApiRouter]) -> None:
+        if self.router is not None:
+            return
+
         self.router = Router()
-        self.router.add_route("/", home)
-        self.router.add_route("/users", users)
+
+        route_list = []
+        for router_items in routes:
+            route_list += router_items.routes
+
+        sorted_routes = sorted(route_list, key=lambda x: x[0])
+        for route in sorted_routes:
+            self.router.add_route(*route)
+
 
     async def __call__(self, scope, receive, send):
-        target = self.router.get_route(scope['path'])
-
-        # following the specs, in order to provide a response to our caller/client
-        # we must follow the two steps you see below
-        # !keep a closer eye to the type of each send call
-        # with http.response.start we can provide status code, headers [considering we are dealing with http requests]
-        # with the http.response.body we can provide a flag finalizing if we are planning to send more data [streaming like] and the payload/chunk
-        # this is enough for now, we will get back to it after to improve and add more details and fix a few things
+        target = self.router.get_route(scope['path'], scope['method'])
 
         if target is None:
-            print("handler not found, ignoring")
             await send({"type": "http.response.start", "status": 404})
             await send({"type": "http.response.body", "body": b"not found"})
             return
 
-        print("handler found")
-        await target.handler()
+        request_data = RequestData(target.query_string_extractor, target.body_extractor)
+        await target.handler(request_data)
         await send({"type": "http.response.start", "status": 200})
         await send({"type": "http.response.body", "body": b"ok"})
-
-
-app = App()
-
-
-# await send({
-#     'type': 'http.response.start',
-#     'status': 200,  # HTTP status code
-#     'headers': [    # List of 2-tuples (name, value) - both as bytes
-#         (b'content-type', b'application/json'),
-#         (b'content-length', b'42'),
-#         (b'custom-header', b'custom-value')
-#     ]
-# })
