@@ -1,0 +1,27 @@
+from asgi.http_responses import (
+    BAD_REQUEST_TEXTResponse,
+    NOT_FOUND_TEXTResponse,
+    METHOD_NOT_ALLOWED_TEXTResponse,
+    BaseHTTPResponse,
+)
+
+class InvalidRequest(Exception):
+    def __init__(self):
+        super().__init__()
+        self.http_response: BaseHTTPResponse = None # just to help with type hinting
+
+class InvalidRequestDataException(InvalidRequest):
+    def __init__(self, message: str):
+        super().__init__()
+        self.http_response = BAD_REQUEST_TEXTResponse(message)
+
+class NotFoundException(InvalidRequest):
+    def __init__(self, message: str = "Not found"):
+        super().__init__()
+        self.status_code = NOT_FOUND_TEXTResponse(message)
+
+class MethodNotAllowedException(InvalidRequest):
+    def __init__(self, message: str = "Method not allowed"):
+        super().__init__()
+        self.status_code = METHOD_NOT_ALLOWED_TEXTResponse(message)
+
