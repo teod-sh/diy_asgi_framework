@@ -36,6 +36,24 @@ class TestRouter(TestCase):
     def setUp(self):
         self.router = Router()
 
+    def test_get_segments(self):
+        batch = [
+            ("", ["/"]), # empty path must be handled as root
+            ("/", ["/"]), # root
+            ("//", ["/"]), # ignore double+ slashes
+            ("//////", ["/"]),  # ignore double+ slashes
+            ("/api", ["/", "api"]),
+            ("/api/v1", ["/", "api", "v1"]),
+            ("/api/v1/users", ["/", "api", "v1", "users"]),
+            ("/api/v1/users/", ["/", "api", "v1", "users"]), # ignore trailing slash
+            ("/api/v1/users/profile", ["/", "api", "v1", "users", "profile"]),
+            ("/api/v1/users/profile/", ["/", "api", "v1", "users", "profile"]), # ignore trailing slash
+        ]
+
+        for path, segments in batch:
+            # print(f"Testing with: {path} expected: {segments}, got: {Router.get_segments(path)}")
+            self.assertEqual(Router.get_segments(path), segments)
+
     def test_basic_route_operations(self):
         """Test basic route addition and retrieval functionality"""
         # Add routes with various paths and methods

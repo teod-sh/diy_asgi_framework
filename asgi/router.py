@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
+from asgi.exceptions import MethodNotAllowedException
 from asgi.types import HandlerType, Methods, QueryExtractor, BodyExtractor
 
 
@@ -50,7 +51,9 @@ class Router:
 
     @staticmethod
     def get_segments(path: str) -> List[str]:
-        return path.split("/")
+        if path == "" or path == "/":
+            return ["/"]
+        return ["/"] + [seg for seg in path.split("/") if seg]
 
     def add_route(
             self, 
@@ -60,6 +63,8 @@ class Router:
             query_string_extractor: QueryExtractor = None,
             body_extractor: BodyExtractor = None,
     ) -> None:
+        assert method in Methods, f"Method {method} not supported"
+
         current = self.root
         segments = self.get_segments(path)
         # insertion DFS like
@@ -73,6 +78,8 @@ class Router:
         current.routes[method] = _Route(handler, query_string_extractor, body_extractor)
 
     def get_route(self, path: str, method: Methods) -> Optional[_Route]:
+        assert method in Methods, f"Method {method} not supported"
+
         current = self.root
         segments = self.get_segments(path)
         for segment in segments:
@@ -83,5 +90,6 @@ class Router:
 
         # method not allowed
         if current.routes[Methods(method)] is None:
-            return None
+            raise MethodNotAllowedException(f"Method {method} not allowed on path {path}")
+
         return current.routes[Methods(method)]
