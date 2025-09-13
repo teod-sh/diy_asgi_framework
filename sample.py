@@ -1,14 +1,21 @@
 from asgi.app import App
 from asgi.api_router import ApiRouter
+from asgi.background_tasks import get_background_tasks, create_task
 from asgi.http_responses import OK_JSONResponse
 from asgi.request_data import RequestData
 from asgi.types import Methods
 
 router1 = ApiRouter()
 
+async def home_bg_task(_) -> None:
+    print("home bg task triggered")
+
 @router1.get("/home")
 async def home(request_data):
+    bg_task = get_background_tasks()
+    await bg_task.add_tasks([create_task(home_bg_task)])
     print("home triggered")
+
     return OK_JSONResponse()
 
 @router1.get("/")
