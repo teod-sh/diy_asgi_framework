@@ -1,6 +1,7 @@
+import asyncio
 from typing import List, Dict, Any, Callable, Awaitable
 
-
+from asgi.background_tasks import _create_background_tasks_instance
 from asgi.exceptions import InvalidRequest
 from asgi.http_responses import (
     NOT_FOUND_TEXTResponse,
@@ -21,8 +22,9 @@ ASGISend = Callable[[Dict[str, Any]], Awaitable[None]]
 
 class App:
 
-    def __init__(self):
-        self.router = None
+    def __init__(self, max_running_tasks: int = 2):
+        self._router = None
+        self._bg_tasks = _create_background_tasks_instance(max_running_tasks=max_running_tasks)
 
     def include_routes(self, routes: List[ApiRouter]) -> None:
         """
@@ -51,9 +53,9 @@ class App:
         app = App()
         app.include_routes([router_1, router_2])
         """
-        assert self.router is None, "include_routes method can be called only once"
+        assert self._router is None, "include_routes method can be called only once"
 
-        self.router = Router()
+        self._router = Router()
 
         route_list = []
         for router_items in routes:
@@ -61,42 +63,45 @@ class App:
 
         sorted_routes = sorted(route_list, key=lambda x: x[0])
         for route in sorted_routes:
-            self.router.add_route(*route)
+            self._router.add_route(*route)
 
     async def __call__(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend):
         if scope['type'] == 'http':
             return await self._handle_http_request(scope, receive, send)
 
-        # we will deal with other types later
+        if scope["type"] == "lifespan":
+            return await self._handle_lifespan(receive, send)
+
+        return None
+
+    async def _handle_lifespan(
+            self, receive: Callable[[], Awaitable[dict[str, Any]]],
+            send: Callable[[dict[str, Any]], Awaitable[None]]
+    ):
+        async def run_bg_tasks():
+            while True:
+                await self._bg_tasks.run_tasks()
+                await asyncio.sleep(0.5)
+
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                asyncio.create_task(run_bg_tasks())
+                await send({"type": "lifespan.startup.complete"})
+
+            elif message["type"] == "lifespan.shutdown":
+                await self._bg_tasks.shutdown()
+                await send({"type": "lifespan.shutdown.complete"})
+                return
 
     async def _handle_http_request(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend):
-        ''' payload ref
-        scope = {
-            'type': 'http',
-            'asgi': {'version': '3.0', 'spec_version': '2.3'},
-            'http_version': '1.1', 'server': ('127.0.0.1', 8000),
-            'client': ('127.0.0.1', 51945), 'scheme': 'http',
-            'method': 'GET', 'root_path': '',
-            'path': '/some-path/', 'raw_path': b'/some-path/',
-            'query_string': b'qs1=1&qs2=opa!',
-            'headers': [
-                (b'user-agent', b'PostmanRuntime/7.45.0'),
-                (b'accept', b'*/*'),
-                (b'postman-token', b'1111f6f3-1111-1111-1111-37150dd41111'),
-                (b'host', b'localhost:8000'),
-                (b'accept-encoding', b'gzip, deflate, br'),
-                (b'connection', b'keep-alive')
-            ],
-            'state': {}
-        }
-        '''
         assert scope['type'] == 'http'
         response_data = await self._run_http_handler(scope['path'], scope['method'], receive)
         await self._send_http_response(response_data, send)
 
     async def _run_http_handler(self, path: str, method: str, receive: ASGIReceive) -> _ResponseData:
         try:
-            target = self.router.get_route(path, method)
+            target = self._router.get_route(path, method)
             if target is None:
                 return await NOT_FOUND_TEXTResponse()()
 
