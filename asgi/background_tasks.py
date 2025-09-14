@@ -113,21 +113,23 @@ class BackgroundTasks:
         return to_process
 
     @cancel_if_server_is_shutting_down(return_value=None)
-    async def _put_back_to_queue_if_allowed(self, task_id: str) -> None:
+    async def _put_back_to_queue_if_allowed(self, task_id: str) -> bool:
         task = self._tasks_map.get(task_id)
         if task is None:
-            return
+            return False
 
         if task.get_attempts() >= task.max_retries:
             print(f"task retry count exceeded: {task_id}")
-            del self._tasks_map[task_id]
-            return
+            return False
 
         task.increment_attempts()
         async with self._lock:
             await self._task_queue.put(task_id)
 
+        return True
+
     async def _run_task(self, target: str) -> None:
+        enqueued = False
         try:
             print(f"trying to process: {target}")
             async with asyncio.timeout(self._tasks_map[target].timeout_after):
@@ -135,15 +137,15 @@ class BackgroundTasks:
                 await task.handler(task.params)
                 print(f"finished task: {target}")
 
-            del self._tasks_map[target]
-
         except TimeoutError:
             print(f"task timeout: {target}")
-            await self._put_back_to_queue_if_allowed(target)
+            enqueued = await self._put_back_to_queue_if_allowed(target)
         except Exception as e:
             print(f"task error: {target} {e}")
             # exceptions should be handled within the handler
         finally:
+            if not enqueued:
+                del self._tasks_map[target]
             async with self._lock:
                 self._on_going_tasks -= 1
 
