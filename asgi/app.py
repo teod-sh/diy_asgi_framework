@@ -83,10 +83,11 @@ class App:
                 await self._bg_tasks.run_tasks()
                 await asyncio.sleep(0.5)
 
+        running_loop = asyncio.get_running_loop()
         while True:
             message = await receive()
             if message["type"] == "lifespan.startup":
-                asyncio.create_task(run_bg_tasks())
+                running_loop.create_task(run_bg_tasks())
                 await send({"type": "lifespan.startup.complete"})
 
             elif message["type"] == "lifespan.shutdown":
