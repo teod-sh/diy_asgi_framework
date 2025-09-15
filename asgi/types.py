@@ -4,7 +4,7 @@ from typing import Callable, TypeVar, Optional, Awaitable, Coroutine
 BODY_TYPE = TypeVar('BODY_TYPE')
 QUERY_STRING_TYPE = TypeVar('QUERY_STRING_TYPE')
 HandlerType = Callable[['RequestData[QUERY_STRING_TYPE, BODY_TYPE]'], Awaitable['BaseHTTPResponse']] # noqa
-QueryExtractor = Optional[Callable[[dict], QUERY_STRING_TYPE]]
+QueryExtractor = Optional[Callable[[bytes], QUERY_STRING_TYPE]]
 BodyExtractor = Optional[Callable[[bytes], BODY_TYPE]]
 TaskHandlerType = Callable[['TaskParams'], Awaitable[None]]
 

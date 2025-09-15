@@ -1,5 +1,7 @@
 import json
-from typing import Generic, Union, AsyncGenerator, Any, Callable, Awaitable, Dict
+
+from typing import Generic, Union, AsyncGenerator, Any, Callable, Awaitable, Dict, Tuple, List, Optional
+from urllib.parse import unquote_plus
 
 from asgi.exceptions import InvalidRequestDataException
 from asgi.types import BODY_TYPE, QUERY_STRING_TYPE, QueryExtractor, BodyExtractor
@@ -7,17 +9,64 @@ from asgi.types import BODY_TYPE, QUERY_STRING_TYPE, QueryExtractor, BodyExtract
 
 class RequestData(Generic[QUERY_STRING_TYPE, BODY_TYPE]):
 
-    def __init__(self, asgi_receiver_method: Callable[[], Awaitable[Dict[str, Any]]],  qs_extractor: QueryExtractor = None, body_extractor: BodyExtractor = None):
+    def __init__(
+            self, asgi_receiver_method: Callable[[], Awaitable[Dict[str, Any]]],
+            headers: List[Tuple[bytes, bytes]],
+            query_string: bytes = b'',
+            qs_extractor: QueryExtractor = None,
+            body_extractor: BodyExtractor = None
+    ):
         self._qs_extractor = qs_extractor
         self._body_extractor = body_extractor
         self._asgi_receiver_method = asgi_receiver_method
 
         self._body = b''
+        self._headers = headers
+        self._query_string = query_string
 
-    async def get_query_string_params(self) -> Union[QUERY_STRING_TYPE, None]:
+    async def get_query_string(self) -> Union[QUERY_STRING_TYPE, None]:
+        """
+        This method will trigger custom extractors registered withing the router
+        The type of the returned value depends on the query_string_extractor used.
+
+        If no extractor is registered, returns None.
+        """
         if self._qs_extractor is None:
             return None
-        return self._qs_extractor({})
+        return self._qs_extractor(self._query_string)
+
+    async def get_query_string_dict(self) -> dict:
+        """
+        Parse the query string as Dict. Malformatted values will be ignored.
+
+        !Important: it won't trigger custom extractors as query_string_extractor is not used
+
+        You would probably want to use either parse_qs or parse_qsl from the urllib.parse STD package,
+        but I wanted to build it just to show the process of parsing it here.
+        """
+        result = {}
+        if not self._query_string:
+            return result
+
+        qs = self._query_string.replace(b'?', b'')
+        for key_value_pair in qs.split(b'&'):
+            infos = key_value_pair.split(b'=')
+            if len(infos) != 2:
+                # skip malformed values
+                continue
+            try:
+                key = unquote_plus(infos[0].decode("utf-8"))
+                value = unquote_plus(infos[1].decode("utf-8"))
+                if key in result:
+                    if not isinstance(result[key], list):
+                        result[key] = [result[key]]
+                    result[key].append(value)
+                else:
+                    result[key] = value
+            except (UnicodeDecodeError, ValueError):
+                continue  # Skip malformed values
+
+        return result
 
     async def get_stream_body_bytes(self) -> AsyncGenerator[bytes, None]:
         """
@@ -55,7 +104,7 @@ class RequestData(Generic[QUERY_STRING_TYPE, BODY_TYPE]):
     async def get_json_body(self) -> dict:
         """
         Parse the request body as JSON.
-        Raises ValueError if body is empty or contains invalid JSON.
+        Raises ValueError if contains invalid JSON.
 
         !Important: it won't trigger custom extractors as body_extractor is not used
         """
@@ -81,7 +130,8 @@ class RequestData(Generic[QUERY_STRING_TYPE, BODY_TYPE]):
         return self._body_extractor(body)
 
     async def get_headers(self) -> dict:
-        ...
+        return {key.decode("utf-8"): value.decode("utf-8") for key, value in self._headers}
 
     async def get_header_value(self, key: str) -> str:
-        ...
+        headers = await self.get_headers()
+        return headers.get(key, "")

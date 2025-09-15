@@ -9,6 +9,7 @@ from asgi.http_responses import (
     BaseHTTPResponse,
     _ResponseData
 )
+from asgi.logger import logger
 from asgi.request_data import RequestData
 from asgi.router import Router
 from asgi.api_router import ApiRouter
@@ -97,19 +98,20 @@ class App:
 
     async def _handle_http_request(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend):
         assert scope['type'] == 'http'
-        response_data = await self._run_http_handler(scope['path'], scope['method'], receive)
+        response_data = await self._run_http_handler(scope, receive)
         await self._send_http_response(response_data, send)
 
-    async def _run_http_handler(self, path: str, method: str, receive: ASGIReceive) -> _ResponseData:
+    async def _run_http_handler(self, http_scope: ASGIScope, receive: ASGIReceive) -> _ResponseData:
+
         try:
-            target = self._router.get_route(path, method)
+            target = self._router.get_route(http_scope['path'], http_scope['method'])
             if target is None:
                 return await NOT_FOUND_TEXTResponse()()
 
-            request_data = RequestData(receive, target.query_string_extractor, target.body_extractor)
+            request_data = RequestData(receive, http_scope['headers'], http_scope['query_string'],target.query_string_extractor, target.body_extractor)
             response = await target.handler(request_data)
             if response is not isinstance(response, BaseHTTPResponse):
-                print('handler returned a non valid response. Response must be an instance of BaseHTTPResponse')
+                logger.error('handler returned a non valid response. Response must be an instance of BaseHTTPResponse', exc_info=True)
                 return await INTERNAL_SERVER_ERROR_TEXTResponse()()
 
             return await response()
@@ -118,7 +120,7 @@ class App:
              return await e.http_response()
 
         except Exception as e:
-            print('error' + str(e))
+            logger.error(f'Unhandled error in request handler: {e}', exc_info=True)
             return await INTERNAL_SERVER_ERROR_TEXTResponse()()
 
     @staticmethod

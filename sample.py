@@ -44,7 +44,8 @@ def body_extractor(body: bytes) -> int:
 )
 async def about(request_data: RequestData[dict, int]):
     print("about careers triggered")
-    qs = await request_data.get_query_string_params()
+    qs = await request_data.get_query_string_dict()
+    print(qs)
     body_stream = bytearray(*[ch async for ch in request_data.get_stream_body_bytes()])
     print(body_stream)
     body_custom = await request_data.get_body()

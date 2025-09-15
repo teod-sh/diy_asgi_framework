@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import List, Any, Dict, Callable
 
+from asgi.logger import logger
 from asgi.types import TaskHandlerType
 
 
@@ -57,7 +58,7 @@ class BackgroundTasks:
 
     async def shutdown(self, timeout: float = 30.0) -> None:
         self._is_server_shutting_down = True
-        print("shutting down background tasks")
+        logger.debug("shutting down background tasks")
         start_time = time.time()
 
         await self._clean_queue()
@@ -71,13 +72,13 @@ class BackgroundTasks:
 
         async with self._lock:
             if self._on_going_tasks > 0:
-                print(f"Warning: {self._on_going_tasks} tasks still running after shutdown timeout")
+                logger.warning(f"{self._on_going_tasks} tasks still running after shutdown timeout")
 
     async def _clean_queue(self):
         async with self._lock:
             while not self._task_queue.empty():
                 _id = await self._task_queue.get()
-                print(f"removing task from queue: {_id}")
+                logger.debug(f"removing task from queue: {_id}")
                 self._task_queue.task_done()
 
     @staticmethod
@@ -89,7 +90,7 @@ class BackgroundTasks:
     @cancel_if_server_is_shutting_down(return_value=None)
     async def add_tasks(self, tasks: List[Task]) -> None:
         async with self._lock:
-            print(f"adding tasks: {len(tasks)}")
+            logger.debug(f"adding tasks: {len(tasks)}")
             for task in tasks:
                 task_id = self._generate_task_id(task.handler.__name__)
                 self._tasks_map[task_id] = task
@@ -119,7 +120,7 @@ class BackgroundTasks:
             return False
 
         if task.get_attempts() >= task.max_retries:
-            print(f"task retry count exceeded: {task_id}")
+            logger.warning(f"removing task from queue: {task_id} . Max attempt exceeded")
             return False
 
         task.increment_attempts()
@@ -131,18 +132,19 @@ class BackgroundTasks:
     async def _run_task(self, target: str) -> None:
         enqueued = False
         try:
-            print(f"trying to process: {target}")
+            logger.debug(f"running task: {target}")
             async with asyncio.timeout(self._tasks_map[target].timeout_after):
                 task = self._tasks_map[target]
                 await task.handler(task.params)
-                print(f"finished task: {target}")
+                logger.debug(f"finished task: {target}")
 
         except TimeoutError:
-            print(f"task timeout: {target}")
+            logger.warning(f"task timeout: {target}")
             enqueued = await self._put_back_to_queue_if_allowed(target)
         except Exception as e:
-            print(f"task error: {target} {e}")
-            # exceptions should be handled within the handler
+            logger.error(f"task error: {target} {e}")
+            logger.warning("exceptions should be handled within task handler")
+
         finally:
             if not enqueued:
                 del self._tasks_map[target]
@@ -151,18 +153,15 @@ class BackgroundTasks:
 
     @cancel_if_server_is_shutting_down(return_value=None)
     async def run_tasks(self) -> None:
-        print(f"running tasks: {self._on_going_tasks}")
+        logger.debug(f"running tasks: {self._on_going_tasks}")
         to_process = await self._get_tasks_to_process()
 
-        print(f"tasks to process: {to_process}")
+        logger.debug(f"new tasks to process: {len(to_process)}")
         running_loop = asyncio.get_running_loop()
 
         for task_id in to_process:
-            print(f"running task: {task_id}")
+            logger.debug(f"dispatching task: {task_id}")
             running_loop.create_task(self._run_task(task_id))
-
-        print(f"on going tasks: {self._on_going_tasks}")
-
 
 _bg_tasks: BackgroundTasks = None
 
