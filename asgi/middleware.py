@@ -9,7 +9,7 @@ class BaseGlobalMiddleware(ABC):
     Base class for global middleware.
     You can implement your own global middleware by inheriting this class.
 
-    e.g: CSRF, Cookie, Session middlewares... anything you want to run in a global scope.
+    e.g: CSRF, Cookie middlewares... anything you want to run in a global scope.
     """
 
     async def __call__(self, call_next: Union['BaseGlobalMiddleware', HandlerType]):
