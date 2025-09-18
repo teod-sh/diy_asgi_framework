@@ -1,5 +1,8 @@
 from abc import ABC
-from typing import List
+from typing import List, Union
+
+from asgi.types import HandlerType
+
 
 class BaseGlobalMiddleware(ABC):
     """
@@ -9,7 +12,7 @@ class BaseGlobalMiddleware(ABC):
     e.g: CSRF, Cookie, Session middlewares... anything you want to run in a global scope.
     """
 
-    async def __call__(self, call_next: 'BaseGlobalMiddleware'):
+    async def __call__(self, call_next: Union['BaseGlobalMiddleware', HandlerType]):
         """
         e.g:
         async def __call__(self, call_next):
@@ -27,7 +30,7 @@ class _MiddlewareManager:
     def __init__(self, middlewares: List[BaseGlobalMiddleware]):
         self.stack = middlewares
 
-    async def wrap(self, handler, request_data):
+    async def wrap(self, handler: HandlerType, request_data):
         current_handler = handler
 
         for middleware in reversed(self.stack):
