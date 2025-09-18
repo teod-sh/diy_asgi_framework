@@ -2,6 +2,7 @@ from asgi.app import App
 from asgi.api_router import ApiRouter
 from asgi.background_tasks import get_background_tasks, create_task
 from asgi.http_responses import OK_JSONResponse
+from asgi.middleware import BaseGlobalMiddleware
 from asgi.request_data import RequestData
 from asgi.types import Methods
 
@@ -55,8 +56,30 @@ async def about(request_data: RequestData[dict, int]):
 
     return OK_JSONResponse()
 
+class Mid1(BaseGlobalMiddleware):
 
-app = App()
+    async def __call__(self, handler):
+        async def wrapper(request_data):
+            print("mid1")
+            resp = await handler(request_data)
+            print("mid1 end")
+            return resp
+
+        return wrapper
+
+class Mid2(BaseGlobalMiddleware):
+
+    async def __call__(self, handler):
+        async def wrapper(request_data):
+            print("mid2")
+            resp = await handler(request_data)
+            print("mid2 end")
+            return resp
+
+        return wrapper
+
+
+app = App(middlewares=[Mid1(), Mid2()])
 app.include_routes([router1, router2])
 
 if __name__ == "__main__":

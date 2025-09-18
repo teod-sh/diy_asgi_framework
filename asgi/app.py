@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Dict, Any, Callable, Awaitable
+from typing import List, Dict, Any, Callable, Awaitable, Optional
 
 from asgi.background_tasks import _create_background_tasks_instance
 from asgi.exceptions import InvalidRequest
@@ -10,6 +10,7 @@ from asgi.http_responses import (
     _ResponseData
 )
 from asgi.logger import logger
+from asgi.middleware import _MiddlewareManager
 from asgi.request_data import RequestData
 from asgi.router import Router
 from asgi.api_router import ApiRouter
@@ -21,11 +22,15 @@ ASGIReceive = Callable[[], Awaitable[Dict[str, Any]]]
 ASGISend = Callable[[Dict[str, Any]], Awaitable[None]]
 
 
+
 class App:
 
-    def __init__(self, max_running_tasks: int = 2):
+    def __init__(self, max_running_tasks: int = 2, middlewares: Optional[List[Callable]] = None):
         self._router = None
         self._bg_tasks = _create_background_tasks_instance(max_running_tasks=max_running_tasks)
+        if not middlewares:
+            middlewares = []
+        self._middleware_manager = _MiddlewareManager(middlewares)
 
     def include_routes(self, routes: List[ApiRouter]) -> None:
         """
@@ -109,8 +114,9 @@ class App:
                 return await NOT_FOUND_TEXTResponse()()
 
             request_data = RequestData(receive, http_scope['headers'], http_scope['query_string'],target.query_string_extractor, target.body_extractor)
-            response = await target.handler(request_data)
-            if response is not isinstance(response, BaseHTTPResponse):
+            response = await self._middleware_manager(target.handler, request_data)
+
+            if not response or not isinstance(response, BaseHTTPResponse):
                 logger.error('handler returned a non valid response. Response must be an instance of BaseHTTPResponse', exc_info=True)
                 return await INTERNAL_SERVER_ERROR_TEXTResponse()()
 
