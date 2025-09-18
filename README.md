@@ -25,7 +25,8 @@ But it is a pretty good foundation for building your own ASGI framework. For sur
 - **Typed request data** - Generic type support for query parameters and request body
 - **Streaming request body** - Efficient handling of large request bodies with async generators
 - **JSON body parsing** - Built-in JSON parsing with error handling
-- **Query String parsing** - Built-in Query String parsing
+- **Query String parsing** - Built-in Query String parsing with support for multiple values and type conversion
+- **Header access** - Easy access to request headers with built-in parsing and manipulation
 - **Custom extractors** - Configurable query string and body extractors for data transformation
 - **Request validation** - Built-in request validation with custom exception handling
 
@@ -49,6 +50,12 @@ But it is a pretty good foundation for building your own ASGI framework. For sur
 - **Automatic error responses** - Built-in HTTP error response generation
 - **Request validation errors** - Proper handling of malformed requests
 - **Method not allowed handling** - Automatic 405 responses for unsupported methods
+
+### 🔧 Middleware System
+- **Global middleware** - Apply middleware functions to all routes for cross-cutting concerns
+- **Middleware chaining** - Support for multiple middleware functions executed in order
+- **Async middleware support** - Full async/await support for non-blocking middleware operations
+
 
 ## Usage example can be found in `sample.py` file
 ```bash
