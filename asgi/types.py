@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Callable, TypeVar, Optional, Awaitable, Coroutine
+from typing import Callable, TypeVar, Optional, Awaitable
 
 BODY_TYPE = TypeVar('BODY_TYPE')
 QUERY_STRING_TYPE = TypeVar('QUERY_STRING_TYPE')

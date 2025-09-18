@@ -18,10 +18,10 @@ class InvalidRequestDataException(InvalidRequest):
 class NotFoundException(InvalidRequest):
     def __init__(self, message: str = "Not found"):
         super().__init__()
-        self.status_code = NOT_FOUND_TEXTResponse(message)
+        self.http_response = NOT_FOUND_TEXTResponse(message)
 
 class MethodNotAllowedException(InvalidRequest):
     def __init__(self, message: str = "Method not allowed"):
         super().__init__()
-        self.status_code = METHOD_NOT_ALLOWED_TEXTResponse(message)
+        self.http_response = METHOD_NOT_ALLOWED_TEXTResponse(message)
 
